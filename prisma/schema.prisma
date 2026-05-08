@@ -1,0 +1,33 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum MaintenanceType {
+  OIL_CHANGE
+  PREVENTIVE
+}
+
+model Maintenance {
+  id                    String          @id @default(uuid())
+  userId                String
+  vehicleId             String
+  name                  String
+  type                  MaintenanceType
+  notes                 String?
+  date                  DateTime
+  nextMaintenanceDate   DateTime?
+  maintanceMileage      Int
+  receiveAlert          Boolean
+  receiveMileageAlert   Boolean         @default(false)
+  receiveDateAlert      Boolean         @default(false)
+  nextMaintenanceMileage Int?
+  cost                  Float?
+  isDeleted             Boolean         @default(false)
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt()
+}
