@@ -56,10 +56,38 @@ export class MaintenancesService extends PrismaClient implements OnModuleInit {
     });
   }
 
-  findByVehicleId(vehicleId: string) {
-    return this.maintenance.findMany({
+  async findByVehicleId(vehicleId: string) {
+    const items = await this.maintenance.findMany({
       where: { vehicleId, isDeleted: false },
       orderBy: { date: 'desc' },
+    });
+
+    const now = new Date();
+    const last = items[0];
+    const futureNextDates = items
+      .map((m) => m.nextMaintenanceDate)
+      .filter((d): d is Date => d != null && d.getTime() > now.getTime());
+
+    const nextServiceDate =
+      futureNextDates.length === 0
+        ? null
+        : new Date(Math.min(...futureNextDates.map((d) => d.getTime())));
+
+    return {
+      items,
+      summary: {
+        lastServiceDate: last?.date ?? null,
+        lastServiceMileage: last?.maintanceMileage ?? null,
+        nextServiceDate,
+      },
+    };
+  }
+
+  /** Called before vehicle hard-delete (gateway orchestration). */
+  softDeleteAllByVehicleId(vehicleId: string) {
+    return this.maintenance.updateMany({
+      where: { vehicleId, isDeleted: false },
+      data: { isDeleted: true },
     });
   }
 

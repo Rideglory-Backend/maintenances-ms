@@ -31,4 +31,9 @@ export class MaintenancesController {
   softDelete(@Payload() payload: SoftDeleteMaintenancePayloadDto) {
     return this.maintenancesService.softDelete(payload.id, payload.vehicleId);
   }
+
+  @MessagePattern('softDeleteMaintenancesByVehicleId')
+  softDeleteAllByVehicleId(@Payload('vehicleId') vehicleId: string) {
+    return this.maintenancesService.softDeleteAllByVehicleId(vehicleId);
+  }
 }
