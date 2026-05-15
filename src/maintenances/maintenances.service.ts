@@ -3,6 +3,8 @@ import { PrismaClient } from '../generated/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
 import {
   CreateMaintenanceDto,
+  FindMaintenancesFilterDto,
+  MaintenanceSortBy,
   UpdateMaintenanceDto,
 } from '@rideglory/contracts';
 import { ClientProxy, RpcException } from '@nestjs/microservices';
@@ -56,15 +58,50 @@ export class MaintenancesService extends PrismaClient implements OnModuleInit {
     });
   }
 
-  async findByVehicleId(vehicleId: string) {
-    const items = await this.maintenance.findMany({
-      where: { vehicleId, isDeleted: false },
-      orderBy: { date: 'desc' },
-    });
-
+  async findByVehicleId(vehicleId: string, filter?: FindMaintenancesFilterDto) {
     const now = new Date();
-    const last = items[0];
-    const futureNextDates = items
+
+    // Build where clause from filter
+    const where = {
+      vehicleId,
+      isDeleted: false,
+      ...(filter?.types?.length ? { type: { in: filter.types } } : {}),
+      ...(filter?.startDate || filter?.endDate
+        ? {
+            date: {
+              ...(filter.startDate ? { gte: new Date(filter.startDate) } : {}),
+              ...(filter.endDate ? { lte: new Date(filter.endDate) } : {}),
+            },
+          }
+        : {}),
+      ...(filter?.urgentOnly
+        ? {
+            receiveAlert: true,
+            nextMaintenanceDate: {
+              lte: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
+            },
+          }
+        : {}),
+    };
+
+    // Build orderBy from filter
+    const orderBy = this.buildOrderBy(filter?.sortBy);
+
+    const items = await this.maintenance.findMany({ where, orderBy });
+
+    // Summary always uses the full (unfiltered) set for the vehicle
+    const allItems = filter
+      ? await this.maintenance.findMany({
+          where: { vehicleId, isDeleted: false },
+          orderBy: { date: 'desc' },
+        })
+      : items;
+
+    const lastByDate = [...allItems].sort(
+      (a, b) => b.date.getTime() - a.date.getTime(),
+    )[0];
+
+    const futureNextDates = allItems
       .map((m) => m.nextMaintenanceDate)
       .filter((d): d is Date => d != null && d.getTime() > now.getTime());
 
@@ -76,11 +113,23 @@ export class MaintenancesService extends PrismaClient implements OnModuleInit {
     return {
       items,
       summary: {
-        lastServiceDate: last?.date ?? null,
-        lastServiceMileage: last?.maintanceMileage ?? null,
+        lastServiceDate: lastByDate?.date ?? null,
+        lastServiceMileage: lastByDate?.maintanceMileage ?? null,
         nextServiceDate,
       },
     };
+  }
+
+  private buildOrderBy(sortBy?: MaintenanceSortBy) {
+    switch (sortBy) {
+      case MaintenanceSortBy.NAME:
+        return { name: 'asc' as const };
+      case MaintenanceSortBy.NEXT_MAINTENANCE:
+        return { nextMaintenanceDate: 'asc' as const };
+      case MaintenanceSortBy.DATE:
+      default:
+        return { date: 'desc' as const };
+    }
   }
 
   /**

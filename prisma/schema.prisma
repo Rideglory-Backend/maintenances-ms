@@ -9,7 +9,13 @@ datasource db {
 
 enum MaintenanceType {
   OIL_CHANGE
+  BRAKE_CHECK
+  TIRE_CHANGE
   PREVENTIVE
+  AIR_FILTER
+  CHAIN_SPROCKET
+  ELECTRICAL
+  OTHER
 }
 
 model Maintenance {

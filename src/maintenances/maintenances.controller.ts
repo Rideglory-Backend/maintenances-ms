@@ -2,6 +2,7 @@ import { Controller } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import {
   CreateMaintenanceDto,
+  FindMaintenancesFilterDto,
   SoftDeleteMaintenancePayloadDto,
   UpdateMaintenancePayloadDto,
 } from '@rideglory/contracts';
@@ -17,8 +18,13 @@ export class MaintenancesController {
   }
 
   @MessagePattern('findMaintenancesByVehicleId')
-  findByVehicleId(@Payload('vehicleId') vehicleId: string) {
-    return this.maintenancesService.findByVehicleId(vehicleId);
+  findByVehicleId(
+    @Payload() payload: { vehicleId: string; filter?: FindMaintenancesFilterDto },
+  ) {
+    return this.maintenancesService.findByVehicleId(
+      payload.vehicleId,
+      payload.filter,
+    );
   }
 
   @MessagePattern('updateMaintenance')
