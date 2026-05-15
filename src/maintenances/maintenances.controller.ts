@@ -36,4 +36,14 @@ export class MaintenancesController {
   softDeleteAllByVehicleId(@Payload('vehicleId') vehicleId: string) {
     return this.maintenancesService.softDeleteAllByVehicleId(vehicleId);
   }
+
+  @MessagePattern('findMaintenancesDueSoon')
+  findMaintenancesDueSoon(@Payload() payload: { daysAhead: number }) {
+    return this.maintenancesService.findMaintenancesDueSoon(payload.daysAhead);
+  }
+
+  @MessagePattern('markMaintenanceReminderSent')
+  markMaintenanceReminderSent(@Payload() payload: { maintenanceId: string }) {
+    return this.maintenancesService.markReminderSent(payload.maintenanceId);
+  }
 }

@@ -83,6 +83,32 @@ export class MaintenancesService extends PrismaClient implements OnModuleInit {
     };
   }
 
+  /**
+   * Returns maintenances where nextMaintenanceDate is approximately daysAhead
+   * days from now (±1 day window), receiveDateAlert = true, and reminderSentAt IS NULL.
+   */
+  async findMaintenancesDueSoon(daysAhead: number) {
+    const now = new Date();
+    const targetFrom = new Date(now.getTime() + (daysAhead - 1) * 24 * 60 * 60 * 1000);
+    const targetTo = new Date(now.getTime() + (daysAhead + 1) * 24 * 60 * 60 * 1000);
+
+    return this.maintenance.findMany({
+      where: {
+        nextMaintenanceDate: { gte: targetFrom, lte: targetTo },
+        receiveDateAlert: true,
+        reminderSentAt: null,
+        isDeleted: false,
+      },
+    });
+  }
+
+  async markReminderSent(maintenanceId: string): Promise<void> {
+    await this.maintenance.update({
+      where: { id: maintenanceId },
+      data: { reminderSentAt: new Date() },
+    });
+  }
+
   /** Called before vehicle hard-delete (gateway orchestration). */
   softDeleteAllByVehicleId(vehicleId: string) {
     return this.maintenance.updateMany({
