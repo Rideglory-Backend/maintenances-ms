@@ -18,23 +18,26 @@ enum MaintenanceType {
   OTHER
 }
 
+enum MaintenanceMode {
+  COMPLETED
+  SCHEDULED
+}
+
 model Maintenance {
-  id                     String          @id @default(uuid())
-  userId                 String
-  vehicleId              String
-  name                   String
-  type                   MaintenanceType
-  notes                  String?
-  date                   DateTime
-  nextMaintenanceDate    DateTime?
-  maintanceMileage       Int
-  receiveAlert           Boolean
-  receiveMileageAlert    Boolean         @default(false)
-  receiveDateAlert       Boolean         @default(false)
-  nextMaintenanceMileage Int?
-  cost                   Float?
-  isDeleted              Boolean         @default(false)
-  reminderSentAt         DateTime?
-  createdAt              DateTime        @default(now())
-  updatedAt              DateTime        @updatedAt()
+  id               String          @id @default(uuid())
+  userId           String
+  vehicleId        String
+  type             MaintenanceType
+  mode             MaintenanceMode @default(COMPLETED)
+  serviceDate      DateTime?
+  odometerAtService Int?
+  workshop         String?
+  notes            String?
+  nextDate         DateTime?
+  nextOdometer     Int?
+  cost             Float?
+  isDeleted        Boolean         @default(false)
+  reminderSentAt   DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt()
 }

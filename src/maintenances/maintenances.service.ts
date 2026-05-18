@@ -4,6 +4,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import {
   CreateMaintenanceDto,
   FindMaintenancesFilterDto,
+  MaintenanceMode,
   MaintenanceSortBy,
   UpdateMaintenanceDto,
 } from '@rideglory/contracts';
@@ -47,28 +48,99 @@ export class MaintenancesService extends PrismaClient implements OnModuleInit {
     }
   }
 
+  /**
+   * Creates one or two maintenance records.
+   *
+   * When mode == COMPLETED and nextKmInterval or nextDate is provided,
+   * a second SCHEDULED record is auto-created.
+   *
+   * Returns: { created: Maintenance[] } — array of 1 or 2 records.
+   */
   async create(createMaintenanceDto: CreateMaintenanceDto) {
     await this.validateOwnerExists(createMaintenanceDto.userId);
 
-    return this.maintenance.create({
+    const {
+      userId,
+      vehicleId,
+      type,
+      mode,
+      serviceDate,
+      odometerAtService,
+      workshop,
+      notes,
+      nextKmInterval,
+      nextOdometer: nextOdometerInput,
+      nextDate,
+      cost,
+    } = createMaintenanceDto;
+
+    // Use nextOdometer directly if provided; otherwise compute from nextKmInterval
+    const nextOdometer =
+      nextOdometerInput != null
+        ? nextOdometerInput
+        : nextKmInterval != null && odometerAtService != null
+          ? odometerAtService + nextKmInterval
+          : nextKmInterval != null
+            ? nextKmInterval
+            : undefined;
+
+    const primary = await this.maintenance.create({
       data: {
-        ...createMaintenanceDto,
+        userId,
+        vehicleId,
+        type,
+        mode,
+        serviceDate: serviceDate ?? null,
+        odometerAtService: odometerAtService ?? null,
+        workshop: workshop ?? null,
+        notes: notes ?? null,
+        nextDate: nextDate ?? null,
+        nextOdometer: nextOdometer ?? null,
+        cost: cost ?? null,
         isDeleted: false,
       },
     });
+
+    // Auto-create SCHEDULED record when completed + next fields provided
+    const shouldCreateScheduled =
+      mode === MaintenanceMode.COMPLETED &&
+      (nextKmInterval != null || nextDate != null);
+
+    if (!shouldCreateScheduled) {
+      return { created: [primary] };
+    }
+
+    const scheduled = await this.maintenance.create({
+      data: {
+        userId,
+        vehicleId,
+        type,
+        mode: MaintenanceMode.SCHEDULED,
+        serviceDate: null,
+        odometerAtService: null,
+        workshop: null,
+        notes: null,
+        nextDate: nextDate ?? null,
+        nextOdometer: nextOdometer ?? null,
+        cost: null,
+        isDeleted: false,
+      },
+    });
+
+    return { created: [primary, scheduled] };
   }
 
   async findByVehicleId(vehicleId: string, filter?: FindMaintenancesFilterDto) {
     const now = new Date();
 
-    // Build where clause from filter
     const where = {
       vehicleId,
       isDeleted: false,
       ...(filter?.types?.length ? { type: { in: filter.types } } : {}),
+      ...(filter?.mode ? { mode: filter.mode } : {}),
       ...(filter?.startDate || filter?.endDate
         ? {
-            date: {
+            serviceDate: {
               ...(filter.startDate ? { gte: new Date(filter.startDate) } : {}),
               ...(filter.endDate ? { lte: new Date(filter.endDate) } : {}),
             },
@@ -76,33 +148,32 @@ export class MaintenancesService extends PrismaClient implements OnModuleInit {
         : {}),
       ...(filter?.urgentOnly
         ? {
-            receiveAlert: true,
-            nextMaintenanceDate: {
+            nextDate: {
               lte: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
             },
           }
         : {}),
     };
 
-    // Build orderBy from filter
     const orderBy = this.buildOrderBy(filter?.sortBy);
-
     const items = await this.maintenance.findMany({ where, orderBy });
 
-    // Summary always uses the full (unfiltered) set for the vehicle
     const allItems = filter
       ? await this.maintenance.findMany({
           where: { vehicleId, isDeleted: false },
-          orderBy: { date: 'desc' },
+          orderBy: { createdAt: 'desc' },
         })
       : items;
 
-    const lastByDate = [...allItems].sort(
-      (a, b) => b.date.getTime() - a.date.getTime(),
+    const completedItems = allItems.filter(
+      (m) => m.mode === MaintenanceMode.COMPLETED,
+    );
+    const lastCompleted = completedItems.sort(
+      (a, b) => (b.serviceDate?.getTime() ?? 0) - (a.serviceDate?.getTime() ?? 0),
     )[0];
 
     const futureNextDates = allItems
-      .map((m) => m.nextMaintenanceDate)
+      .map((m) => m.nextDate)
       .filter((d): d is Date => d != null && d.getTime() > now.getTime());
 
     const nextServiceDate =
@@ -113,8 +184,8 @@ export class MaintenancesService extends PrismaClient implements OnModuleInit {
     return {
       items,
       summary: {
-        lastServiceDate: lastByDate?.date ?? null,
-        lastServiceMileage: lastByDate?.maintanceMileage ?? null,
+        lastServiceDate: lastCompleted?.serviceDate ?? null,
+        lastServiceMileage: lastCompleted?.odometerAtService ?? null,
         nextServiceDate,
       },
     };
@@ -122,20 +193,16 @@ export class MaintenancesService extends PrismaClient implements OnModuleInit {
 
   private buildOrderBy(sortBy?: MaintenanceSortBy) {
     switch (sortBy) {
-      case MaintenanceSortBy.NAME:
-        return { name: 'asc' as const };
+      case MaintenanceSortBy.TYPE:
+        return { type: 'asc' as const };
       case MaintenanceSortBy.NEXT_MAINTENANCE:
-        return { nextMaintenanceDate: 'asc' as const };
+        return { nextDate: 'asc' as const };
       case MaintenanceSortBy.DATE:
       default:
-        return { date: 'desc' as const };
+        return { createdAt: 'desc' as const };
     }
   }
 
-  /**
-   * Returns maintenances where nextMaintenanceDate is approximately daysAhead
-   * days from now (±1 day window), receiveDateAlert = true, and reminderSentAt IS NULL.
-   */
   async findMaintenancesDueSoon(daysAhead: number) {
     const now = new Date();
     const targetFrom = new Date(now.getTime() + (daysAhead - 1) * 24 * 60 * 60 * 1000);
@@ -143,8 +210,7 @@ export class MaintenancesService extends PrismaClient implements OnModuleInit {
 
     return this.maintenance.findMany({
       where: {
-        nextMaintenanceDate: { gte: targetFrom, lte: targetTo },
-        receiveDateAlert: true,
+        nextDate: { gte: targetFrom, lte: targetTo },
         reminderSentAt: null,
         isDeleted: false,
       },
@@ -158,7 +224,6 @@ export class MaintenancesService extends PrismaClient implements OnModuleInit {
     });
   }
 
-  /** Called before vehicle hard-delete (gateway orchestration). */
   softDeleteAllByVehicleId(vehicleId: string) {
     return this.maintenance.updateMany({
       where: { vehicleId, isDeleted: false },
@@ -172,11 +237,7 @@ export class MaintenancesService extends PrismaClient implements OnModuleInit {
     }
 
     const maintenance = await this.maintenance.findFirst({
-      where: {
-        id,
-        vehicleId,
-        isDeleted: false,
-      },
+      where: { id, vehicleId, isDeleted: false },
     });
 
     if (!maintenance) {
@@ -186,19 +247,45 @@ export class MaintenancesService extends PrismaClient implements OnModuleInit {
       });
     }
 
+    const {
+      serviceDate,
+      odometerAtService,
+      workshop,
+      nextKmInterval,
+      nextOdometer: nextOdometerInput,
+      nextDate,
+      mode,
+      ...rest
+    } = updateMaintenanceDto as any;
+
+    const nextOdometer =
+      nextOdometerInput != null
+        ? nextOdometerInput
+        : nextKmInterval != null && odometerAtService != null
+          ? odometerAtService + nextKmInterval
+          : nextKmInterval != null && maintenance.odometerAtService != null
+            ? maintenance.odometerAtService + nextKmInterval
+            : undefined;
+
+    const updateData = {
+      ...rest,
+      ...(mode !== undefined ? { mode } : {}),
+      ...(serviceDate !== undefined ? { serviceDate } : {}),
+      ...(odometerAtService !== undefined ? { odometerAtService } : {}),
+      ...(workshop !== undefined ? { workshop } : {}),
+      ...(nextDate !== undefined ? { nextDate } : {}),
+      ...(nextOdometer !== undefined ? { nextOdometer } : {}),
+    };
+
     return this.maintenance.update({
       where: { id },
-      data: updateMaintenanceDto,
+      data: updateData,
     });
   }
 
   async softDelete(id: string, vehicleId: string) {
     const maintenance = await this.maintenance.findFirst({
-      where: {
-        id,
-        vehicleId,
-        isDeleted: false,
-      },
+      where: { id, vehicleId, isDeleted: false },
     });
 
     if (!maintenance) {
