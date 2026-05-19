@@ -29,6 +29,7 @@ WORKDIR /build/maintenances-ms
 COPY --from=builder /build/maintenances-ms/node_modules ./node_modules
 COPY --from=builder /build/maintenances-ms/dist ./dist
 COPY maintenances-ms/prisma ./prisma
+COPY maintenances-ms/prisma.config.ts ./prisma.config.ts
 COPY maintenances-ms/healthcheck.js ./healthcheck.js
 
 USER node
