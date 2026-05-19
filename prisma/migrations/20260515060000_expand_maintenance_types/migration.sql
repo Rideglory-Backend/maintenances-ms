@@ -1,7 +1,0 @@
--- iter-3: expand MaintenanceType enum from 2 to 8 values to match Flutter app
-ALTER TYPE "MaintenanceType" ADD VALUE IF NOT EXISTS 'BRAKE_CHECK';
-ALTER TYPE "MaintenanceType" ADD VALUE IF NOT EXISTS 'TIRE_CHANGE';
-ALTER TYPE "MaintenanceType" ADD VALUE IF NOT EXISTS 'AIR_FILTER';
-ALTER TYPE "MaintenanceType" ADD VALUE IF NOT EXISTS 'CHAIN_SPROCKET';
-ALTER TYPE "MaintenanceType" ADD VALUE IF NOT EXISTS 'ELECTRICAL';
-ALTER TYPE "MaintenanceType" ADD VALUE IF NOT EXISTS 'OTHER';
