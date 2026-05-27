@@ -32,7 +32,8 @@ COPY maintenances-ms/prisma ./prisma
 COPY maintenances-ms/prisma.config.ts ./prisma.config.ts
 COPY maintenances-ms/healthcheck.js ./healthcheck.js
 
-RUN for d in node_modules/.pnpm/@prisma+client-runtime-utils@*/node_modules/@prisma/client-runtime-utils; do \
+RUN rm -rf node_modules/@prisma/client-runtime-utils && \
+    for d in node_modules/.pnpm/@prisma+client-runtime-utils@*/node_modules/@prisma/client-runtime-utils; do \
       [ -d "$d" ] && cp -r "$d" node_modules/@prisma/client-runtime-utils && break; \
     done
 
