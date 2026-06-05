@@ -199,7 +199,7 @@ export class MaintenancesService extends PrismaClient implements OnModuleInit {
         return { nextDate: 'asc' as const };
       case MaintenanceSortBy.DATE:
       default:
-        return { createdAt: 'desc' as const };
+        return { serviceDate: { sort: 'desc' as const, nulls: 'last' as const } };
     }
   }
 
