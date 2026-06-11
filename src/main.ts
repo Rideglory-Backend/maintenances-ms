@@ -1,3 +1,4 @@
+import './instrument';
 import 'dotenv/config';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
@@ -30,7 +31,7 @@ async function bootstrap() {
     }),
   );
 
-  app.useGlobalFilters(new RpcAllExceptionsFilter());
+  app.useGlobalFilters(new RpcAllExceptionsFilter('maintenances-ms'));
 
   await app.listen();
   app.get(Logger).log(`Maintenances Microservice is running on port ${envs.port}`);
