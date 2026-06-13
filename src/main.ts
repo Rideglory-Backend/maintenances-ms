@@ -1,14 +1,14 @@
+import './instrument';
 import 'dotenv/config';
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
-import { RpcAllExceptionsFilter } from '@rideglory/common-lib';
+import { Logger } from 'nestjs-pino';
+import { RpcAllExceptionsFilter, TracingDeserializer } from '@rideglory/common-lib';
 import { AppModule } from './app.module';
 import { envs } from './config';
 
 async function bootstrap() {
-  const logger = new Logger('Main');
-
   const app = await NestFactory.createMicroservice<MicroserviceOptions>(
     AppModule,
     {
@@ -16,9 +16,13 @@ async function bootstrap() {
       options: {
         host: '0.0.0.0',
         port: envs.port,
+        deserializer: new TracingDeserializer(),
       },
+      bufferLogs: true,
     },
   );
+
+  app.useLogger(app.get(Logger));
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -27,10 +31,10 @@ async function bootstrap() {
     }),
   );
 
-  app.useGlobalFilters(new RpcAllExceptionsFilter());
+  app.useGlobalFilters(new RpcAllExceptionsFilter('maintenances-ms'));
 
   await app.listen();
-  logger.log(`Maintenances Microservice is running on port ${envs.port}`);
+  app.get(Logger).log(`Maintenances Microservice is running on port ${envs.port}`);
 }
 
 bootstrap();
