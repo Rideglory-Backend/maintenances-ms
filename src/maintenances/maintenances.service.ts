@@ -231,6 +231,13 @@ export class MaintenancesService extends PrismaClient implements OnModuleInit {
     });
   }
 
+  softDeleteAllByUserId(userId: string) {
+    return this.maintenance.updateMany({
+      where: { userId, isDeleted: false },
+      data: { isDeleted: true },
+    });
+  }
+
   async update(id: string, vehicleId: string, updateMaintenanceDto: UpdateMaintenanceDto) {
     if (updateMaintenanceDto.userId) {
       await this.validateOwnerExists(updateMaintenanceDto.userId);

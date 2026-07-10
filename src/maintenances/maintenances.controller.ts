@@ -43,6 +43,11 @@ export class MaintenancesController {
     return this.maintenancesService.softDeleteAllByVehicleId(vehicleId);
   }
 
+  @MessagePattern('softDeleteMaintenancesByUserId')
+  softDeleteAllByUserId(@Payload('userId') userId: string) {
+    return this.maintenancesService.softDeleteAllByUserId(userId);
+  }
+
   @MessagePattern('findMaintenancesDueSoon')
   findMaintenancesDueSoon(@Payload() payload: { daysAhead: number }) {
     return this.maintenancesService.findMaintenancesDueSoon(payload.daysAhead);
